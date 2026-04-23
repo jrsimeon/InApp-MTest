@@ -28,7 +28,7 @@ def search_movie():
                     literal('%') + TitleBasics.tconst + literal('%')
                 )
             )
-            .filter(TitleBasics.primaryTitle.ilike(f"%{movie_name}%"))
+            .filter(TitleBasics.primaryTitle.ilike(f"{movie_name}%"))
             .limit(20)
             .all()
         )
