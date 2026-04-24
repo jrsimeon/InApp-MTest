@@ -1,7 +1,8 @@
 from flask import Flask, request, jsonify
-from sqlalchemy import literal
+from sqlalchemy import literal, cast, Integer, func
+
 from database import SessionLocal
-from SQLORmodel import TitleBasics, NameBasics
+from SQLORmodel import TitleBasics, NameBasics, TitlePrincipals
 from flask import render_template
 
 app = Flask(__name__)
@@ -28,7 +29,7 @@ def search_movie():
                     literal('%') + TitleBasics.tconst + literal('%')
                 )
             )
-            .filter(TitleBasics.primaryTitle.ilike(f"{movie_name}%"))
+            .filter(TitleBasics.primaryTitle.ilike(f"%{movie_name}%"))
             .limit(20)
             .all()
         )
@@ -44,6 +45,225 @@ def search_movie():
             {"movie": movie, "cast": list(set(names))}
             for movie, names in data.items()
         ]
+
+        return jsonify(response)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        session.close()
+
+
+# @app.route("/moviesearch", methods=["GET"])
+# def search_allmovie():
+#     movie_name = request.args.get("title")
+#     year = request.args.get("year")
+#     genre = request.args.get("genre")
+#     person_name = request.args.get("person")
+#     content_type = request.args.get("type")  # movie, tvSeries, etc.
+
+#     if not movie_name:
+#         return jsonify({"error": "Please provide 'title' query param"}), 400
+
+#     session = SessionLocal()
+
+#     try:
+#         query = (
+#             session.query(
+#                 TitleBasics.primaryTitle,
+#                 NameBasics.primaryName
+#             )
+#             .join(
+#                 NameBasics,
+#                 NameBasics.knownForTitles.like(
+#                     literal('%') + TitleBasics.tconst + literal('%')
+#                 )
+#             )
+#         )
+
+#         # Apply filters dynamically
+#         filters = []
+
+#         # Title filter (mandatory)
+#         filters.append(TitleBasics.primaryTitle.ilike(f"%{movie_name}%"))
+
+#         # Year filter
+#         if year:
+#             filters.append(cast(TitleBasics.startYear, Integer) == int(year))
+
+#         # Genre filter
+#         if genre:
+#             filters.append(TitleBasics.genres.ilike(f"%{genre}%"))
+
+#         # Person name filter
+#         if person_name:
+#             filters.append(NameBasics.primaryName.ilike(f"%{person_name}%"))
+
+#         # Type filter (movie, tvSeries, etc.)
+#         if content_type:
+#             filters.append(TitleBasics.titleType.ilike(f"%{content_type}%"))
+
+#         for f in filters:
+#             query = query.filter(f)
+
+#         query = query.limit(20)
+
+#         results = query.all()
+
+#         # Format response
+#         data = {}
+#         for movie, name in results:
+#             if movie not in data:
+#                 data[movie] = []
+#             data[movie].append(name)
+
+#         response = [
+#             {"movie": movie, "cast": list(set(names))}
+#             for movie, names in data.items()
+#         ]
+
+#         return jsonify(response)
+
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+
+#     finally:
+#         session.close()
+
+@app.route("/moviesearch", methods=["GET"])
+def search_allmovie():
+    movie_name = request.args.get("title")
+    year = request.args.get("year")
+    genre = request.args.get("genre")
+    person_name = request.args.get("person")
+    content_type = request.args.get("type")
+
+    if not movie_name:
+        return jsonify({"error": "Please provide 'title' query param"}), 400
+
+    session = SessionLocal()
+
+    try:
+        query = (
+            session.query(
+                TitleBasics.tconst,
+                TitleBasics.primaryTitle,
+                TitleBasics.startYear,
+                TitleBasics.titleType,
+                TitleBasics.genres,
+                NameBasics.primaryName
+            )
+            .join(TitlePrincipals, TitlePrincipals.tconst == TitleBasics.tconst)
+            .join(NameBasics, NameBasics.nconst == TitlePrincipals.nconst)
+            )
+        
+
+        # Apply filters
+        filters = []
+        filters.append(TitleBasics.primaryTitle.ilike(f"%{movie_name}%"))
+
+        if year:
+            filters.append(cast(TitleBasics.startYear, Integer) == int(year))
+
+        if genre:
+            filters.append(TitleBasics.genres.ilike(f"%{genre}%"))
+
+        if person_name:
+            filters.append(NameBasics.primaryName.ilike(f"%{person_name}%"))
+
+        if content_type:
+            filters.append(TitleBasics.titleType.ilike(f"%{content_type}%"))
+
+        for f in filters:
+            query = query.filter(f)
+
+        query = query.limit(50)
+
+        results = query.all()
+
+        # ✅ Group by movie (tconst)
+        data = {}
+
+        for tconst, title, year_val, ttype, genres, person in results:
+            if tconst not in data:
+                data[tconst] = {
+                    "Title": title,
+                    "Year Released": year_val if year_val != "\\N" else None,
+                    "Type": ttype,
+                    "Genre": genres,
+                    "List of People Associated with the title": []
+                }
+
+            if person:
+                data[tconst]["List of People Associated with the title"].append(person)
+
+        # ✅ Remove duplicates in people list
+        response = []
+        for movie in data.values():
+            movie["List of People Associated with the title"] = list(
+                set(movie["List of People Associated with the title"])
+            )
+            response.append(movie)
+
+        return jsonify(response)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        session.close()
+
+@app.route("/personsearch", methods=["GET"])
+def search_person():
+    name = request.args.get("name")
+    movie_title = request.args.get("movie")
+    profession = request.args.get("profession")
+
+    session = SessionLocal()
+
+    try:
+        query = (
+            session.query(
+                NameBasics.nconst,
+                NameBasics.primaryName,
+                NameBasics.birthYear,
+                NameBasics.primaryProfession,
+                func.array_agg(TitleBasics.primaryTitle).label("known_titles")
+            )
+            .join(TitlePrincipals, TitlePrincipals.nconst == NameBasics.nconst)
+            .join(TitleBasics, TitleBasics.tconst == TitlePrincipals.tconst)
+        )
+
+        # Filters
+        if name:
+            query = query.filter(NameBasics.primaryName.ilike(f"%{name}%"))
+
+        if profession:
+            query = query.filter(NameBasics.primaryProfession.ilike(f"%{profession}%"))
+
+        if movie_title:
+            query = query.filter(TitleBasics.primaryTitle.ilike(f"%{movie_title}%"))
+
+        # ✅ FIX HERE
+        query = query.group_by(
+            NameBasics.nconst,
+            NameBasics.primaryName,
+            NameBasics.birthYear,
+            NameBasics.primaryProfession
+        ).limit(50)
+
+        results = query.all()
+
+        # ✅ Format response
+        response = []
+        for nconst, pname, byear, prof, titles in results:
+            response.append({
+                "Name": pname,
+                "Birth Year": byear if byear != "\\N" else None,
+                "Profession": prof.split(",") if prof else [],
+                "Known for Titles": list(set(titles)) if titles else []
+            })
 
         return jsonify(response)
 
