@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Logging out...</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+body {
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    font-family: 'Segoe UI', sans-serif;
+    color: white;
+}
+
+.container {
+    text-align: center;
+}
+
+.loader {
+    margin: 20px auto;
+    border: 5px solid #f3f3f3;
+    border-top: 5px solid white;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    100% { transform: rotate(360deg); }
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+    <h2>Logging you out...</h2>
+    <div class="loader"></div>
+    <p>Please wait</p>
+</div>
+
+<script>
+(async function logout() {
+    try {
+        const token = localStorage.getItem("token");
+
+        await fetch("/auth/api/logout", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${token}`
+            }
+        });
+
+    } catch (e) {
+        console.log("Logout error", e);
+    } finally {
+        // Clear token
+        localStorage.removeItem("token");
+
+        // Redirect to login
+        window.location.href = "/auth/login";
+    }
+})();
+</script>
+
+</body>
+</html>

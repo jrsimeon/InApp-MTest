@@ -32,9 +32,16 @@ from sqlalchemy.exc import SQLAlchemyError
 # =========================
 # CONFIGURATION
 # =========================
+from dotenv import load_dotenv
+# Load variables from .env into the environment
+load_dotenv()
+db_url = os.getenv("DATABASE_URL")
+sqlite_db = os.getenv("SQLITE_DB_NAME")
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-SQLITE_DB_URL = f"sqlite:///{os.path.join(BASE_DIR, 'Database', 'MovieInfo.db')}" #"sqlite:///source.db"
-POSTGRES_DB_URL = "postgresql+psycopg2://postgres:jrs%23321@localhost:5432/inapp_db"
+
+SQLITE_DB_URL = f"sqlite:///{os.path.join(BASE_DIR, 'Database', '"+sqlite_db+"')}" 
+POSTGRES_DB_URL = db_url 
+
 
 BATCH_SIZE = 2000
 MAX_RETRIES = 3

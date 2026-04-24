@@ -2,9 +2,12 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+from dotenv import load_dotenv
 
-# engine = create_engine(f"sqlite:///{os.path.join(BASE_DIR, 'Database', 'MovieInfo.db')}")
-engine = create_engine("postgresql+psycopg2://postgres:jrs%23321@localhost:5432/inapp_db")
+# Load variables from .env into the environment
+load_dotenv()
+db_url = os.getenv("DATABASE_URL")
+
+engine = create_engine(db_url)
 
 SessionLocal = sessionmaker(bind=engine)

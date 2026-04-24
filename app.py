@@ -1,135 +1,22 @@
 from flask import Flask, request, jsonify
 from sqlalchemy import literal, cast, Integer, func
-
+from flask_jwt_extended import JWTManager
 from database import SessionLocal
 from SQLORmodel import TitleBasics, NameBasics, TitlePrincipals
-from flask import render_template
-
+from flask import render_template, redirect, url_for
+from auth import auth
+from config import settings
 app = Flask(__name__)
 
+# 🔐 JWT Config
+app.config["JWT_SECRET_KEY"] = settings.JWT_SECRET_KEY  # change in prod
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = settings.JWT_ACCESS_TOKEN_EXPIRES
+app.config["JWT_TOKEN_LOCATION"] = ["headers"]
 
-@app.route("/search", methods=["GET"])
-def search_movie():
-    movie_name = request.args.get("title")
+jwt = JWTManager(app)
 
-    if not movie_name:
-        return jsonify({"error": "Please provide 'title' query param"}), 400
-
-    session = SessionLocal()
-
-    try:
-        results = (
-            session.query(
-                TitleBasics.primaryTitle,
-                NameBasics.primaryName
-            )
-            .join(
-                NameBasics,
-                NameBasics.knownForTitles.like(
-                    literal('%') + TitleBasics.tconst + literal('%')
-                )
-            )
-            .filter(TitleBasics.primaryTitle.ilike(f"%{movie_name}%"))
-            .limit(20)
-            .all()
-        )
-
-        # Format response
-        data = {}
-        for movie, name in results:
-            if movie not in data:
-                data[movie] = []
-            data[movie].append(name)
-
-        response = [
-            {"movie": movie, "cast": list(set(names))}
-            for movie, names in data.items()
-        ]
-
-        return jsonify(response)
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-    finally:
-        session.close()
-
-
-# @app.route("/moviesearch", methods=["GET"])
-# def search_allmovie():
-#     movie_name = request.args.get("title")
-#     year = request.args.get("year")
-#     genre = request.args.get("genre")
-#     person_name = request.args.get("person")
-#     content_type = request.args.get("type")  # movie, tvSeries, etc.
-
-#     if not movie_name:
-#         return jsonify({"error": "Please provide 'title' query param"}), 400
-
-#     session = SessionLocal()
-
-#     try:
-#         query = (
-#             session.query(
-#                 TitleBasics.primaryTitle,
-#                 NameBasics.primaryName
-#             )
-#             .join(
-#                 NameBasics,
-#                 NameBasics.knownForTitles.like(
-#                     literal('%') + TitleBasics.tconst + literal('%')
-#                 )
-#             )
-#         )
-
-#         # Apply filters dynamically
-#         filters = []
-
-#         # Title filter (mandatory)
-#         filters.append(TitleBasics.primaryTitle.ilike(f"%{movie_name}%"))
-
-#         # Year filter
-#         if year:
-#             filters.append(cast(TitleBasics.startYear, Integer) == int(year))
-
-#         # Genre filter
-#         if genre:
-#             filters.append(TitleBasics.genres.ilike(f"%{genre}%"))
-
-#         # Person name filter
-#         if person_name:
-#             filters.append(NameBasics.primaryName.ilike(f"%{person_name}%"))
-
-#         # Type filter (movie, tvSeries, etc.)
-#         if content_type:
-#             filters.append(TitleBasics.titleType.ilike(f"%{content_type}%"))
-
-#         for f in filters:
-#             query = query.filter(f)
-
-#         query = query.limit(20)
-
-#         results = query.all()
-
-#         # Format response
-#         data = {}
-#         for movie, name in results:
-#             if movie not in data:
-#                 data[movie] = []
-#             data[movie].append(name)
-
-#         response = [
-#             {"movie": movie, "cast": list(set(names))}
-#             for movie, names in data.items()
-#         ]
-
-#         return jsonify(response)
-
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
-
-#     finally:
-#         session.close()
+# Register blueprint
+app.register_blueprint(auth, url_prefix="/auth")
 
 @app.route("/moviesearch", methods=["GET"])
 def search_allmovie():
@@ -273,8 +160,16 @@ def search_person():
     finally:
         session.close()
 
+
+# Default route → redirect to login
 @app.route("/")
 def home():
+    return redirect(url_for("auth.login_page"))
+
+
+# Dashboard route (main app template)
+@app.route("/dashboard", methods=["GET", "POST"])
+def dashboard():
     return render_template("index.html")
 
 if __name__ == "__main__":
